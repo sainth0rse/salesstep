@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    container_name: ss_db
+    environment:
+      POSTGRES_DB: ssdb
+      POSTGRES_USER: ssuser
+      POSTGRES_PASSWORD: sspassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  minio:
+    image: minio/minio:latest
+    container_name: ss_minio
+    environment:
+      MINIO_ROOT_USER: root
+      MINIO_ROOT_PASSWORD: rootpassword
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"  # сам MinIO
+      - "9001:9001"  # панель управления
+    command: server /data --console-address ":9001"
+
+volumes:
+  db_data:
+  minio_data:
