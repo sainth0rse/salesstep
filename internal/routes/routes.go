@@ -3,24 +3,27 @@ package routes
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/h0rse/ss/internal/handlers"
+	"github.com/h0rse/ss/internal/middleware"
 )
 
 func SetupRoutes(app *fiber.App) {
-	// Группа /api
 	api := app.Group("/api")
 
-	// Группа авторизации (регистрация и логин)
+	// auth (без middleware)
 	auth := api.Group("/auth")
-	auth.Post("/register", handlers.RegisterHandler) // из register.go
-	auth.Post("/login", handlers.LoginHandler)       // из auth.go
+	auth.Post("/register", handlers.RegisterHandler)
+	auth.Post("/login", handlers.LoginHandler)
 
 	// Пример защищённого маршрута
 	protected := api.Group("/protected")
-	protected.Get("/", handlers.ProtectedHandler) // из auth.go
+	// Подключаем middleware RequireAuth
+	protected.Use(middleware.RequireAuth)
+	protected.Get("/", handlers.ProtectedHandler)
 
-	// Группа /api/profile
+	// Профиль
 	profile := api.Group("/profile")
+	// Для профиля тоже используем RequireAuth, чтобы брать userID из токена
+	profile.Use(middleware.RequireAuth)
 	profile.Post("/photo", handlers.UploadProfilePhoto)
 	profile.Put("/", handlers.UpdateProfileHandler)
-
 }

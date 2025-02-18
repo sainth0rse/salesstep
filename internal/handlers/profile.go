@@ -15,8 +15,13 @@ import (
 
 // UploadProfilePhoto – загружает файл в MinIO и обновляет поле photo_url в таблице profiles
 func UploadProfilePhoto(c *fiber.Ctx) error {
-	// Пример: берём userID=1 (в реальном проекте вытаскиваем из JWT)
-	userID := 1
+	// Достаём userID из Locals (middleware его туда положил)
+	userID, ok := c.Locals("userID").(int)
+	if !ok || userID == 0 {
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Не удалось определить userID",
+		})
+	}
 
 	fileHeader, err := c.FormFile("photo")
 	if err != nil {
