@@ -1,76 +1,51 @@
 package handlers
 
 import (
-	"context"
-	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/h0rse/ss/config"
 	"github.com/h0rse/ss/internal/services"
-	minio "github.com/minio/minio-go/v7"
 )
 
-// UploadProfilePhoto – загружает файл в MinIO и обновляет поле photo_url в таблице profiles
-func UploadProfilePhoto(c *fiber.Ctx) error {
-	// Достаём userID из Locals (middleware его туда положил)
-	userID, ok := c.Locals("userID").(int)
-	if !ok || userID == 0 {
-		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
-			"error": "Не удалось определить userID",
-		})
-	}
+// ProfileUpdateRequest – модель входных данных для PUT /api/profile
+type ProfileUpdateRequest struct {
+	FullName   string `json:"full_name"`
+	Phone      string `json:"phone"`
+	Company    string `json:"company"`
+	Position   string `json:"position"`
+	Requisites string `json:"requisites"`
+}
 
-	fileHeader, err := c.FormFile("photo")
-	if err != nil {
+// UpdateProfileHandler – обработчик для PUT /api/profile
+func UpdateProfileHandler(c *fiber.Ctx) error {
+	// userID достаём из middleware (Locals) или пока хардкодим
+	userID := 1
+
+	var req ProfileUpdateRequest
+	if err := c.BodyParser(&req); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
-			"error": "Файл не передан",
+			"error": "Невалидный запрос",
 		})
 	}
 
-	file, err := fileHeader.Open()
-	if err != nil {
-		log.Printf("Ошибка при открытии файла: %v", err)
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Не удалось открыть файл",
-		})
-	}
-	defer file.Close()
-
-	fileName := fmt.Sprintf("profile_%d_%d_%s", userID, time.Now().Unix(), fileHeader.Filename)
-
-	// Загрузить в MinIO
-	info, err := config.MinioClient.PutObject(
-		context.Background(),
-		config.MinioBucket,
-		fileName,
-		file,
-		fileHeader.Size,
-		minio.PutObjectOptions{ContentType: fileHeader.Header.Get("Content-Type")},
+	profileService := services.NewProfileService()
+	err := profileService.UpdateProfile(
+		userID,
+		req.FullName,
+		req.Phone,
+		req.Company,
+		req.Position,
+		req.Requisites,
 	)
 	if err != nil {
-		log.Printf("MinIO PutObject error: %v", err)
+		log.Printf("DB error in UpdateProfile: %v", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Ошибка при загрузке в MinIO",
-		})
-	}
-
-	photoURL := fmt.Sprintf("http://localhost:9000/%s/%s", config.MinioBucket, fileName)
-
-	// Обновляем photo_url в таблице profiles
-	profileService := services.NewProfileService()
-	if err := profileService.UpdatePhotoURL(userID, photoURL); err != nil {
-		log.Printf("DB error in UpdatePhotoURL: %v", err)
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Не удалось обновить профиль",
+			"error": "Ошибка при обновлении профиля",
 		})
 	}
 
 	return c.JSON(fiber.Map{
-		"message":   "Фото успешно загружено",
-		"photo_url": photoURL,
-		"size":      info.Size,
+		"message": "Профиль обновлён",
 	})
 }
